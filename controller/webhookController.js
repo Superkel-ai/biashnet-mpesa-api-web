@@ -4,6 +4,7 @@ const {
 
 const {
   processMpesaB2CCallback,
+  processMpesaB2CTimeout,
 } = require("../service/withdrawalCallbackService");
 
 const {
@@ -254,6 +255,55 @@ async function mpesaB2CCallback(req, res) {
 
 /*
 =========================================================
+M-PESA B2C QUEUE TIMEOUT
+=========================================================
+
+POST
+
+/api/webhooks/mpesa/b2c/timeout
+
+This is the QueueTimeOutURL sent with every seller
+payout. Without it Safaricom's timeout notice hit a 404
+and the withdrawal sat PROCESSING with nobody told.
+=========================================================
+*/
+async function mpesaB2CTimeout(req, res) {
+
+  try {
+
+    const result =
+      await processMpesaB2CTimeout(
+        req.body
+      );
+
+
+    console.log(
+      "📦 B2C TIMEOUT RESULT:",
+      JSON.stringify(
+        result,
+        null,
+        2
+      )
+    );
+
+
+    return res.sendStatus(200);
+
+  } catch (error) {
+
+    console.error(
+      "❌ M-PESA B2C timeout webhook controller error:",
+      error
+    );
+
+    return res.sendStatus(200);
+
+  }
+
+}
+
+/*
+=========================================================
 FINANCE M-PESA B2C CALLBACK
 =========================================================
 
@@ -298,6 +348,8 @@ module.exports = {
   mpesaStkCallback,
 
   mpesaB2CCallback,
+
+  mpesaB2CTimeout,
 
   mpesaFinanceB2CCallback,
 

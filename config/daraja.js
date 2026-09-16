@@ -93,7 +93,7 @@ const DARajaConfig = {
 
     b2cUrl:
         process.env.MPESA_B2C_URL ||
-        "https://api.safaricom.co.ke/mpesa/b2cpayments/v1/paymentrequest",
+        "https://api.safaricom.co.ke/mpesa/b2c/v1/paymentrequest",
 
 
     /*

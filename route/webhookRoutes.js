@@ -5,6 +5,7 @@ const router = express.Router();
 const {
   mpesaStkCallback,
   mpesaB2CCallback,
+  mpesaB2CTimeout,
   mpesaFinanceB2CCallback,
 } = require("../controller/webhookController");
 
@@ -84,6 +85,27 @@ This uses a separate B2C callback processor.
 router.post(
   "/mpesa/b2c",
   mpesaB2CCallback
+);
+
+
+/*
+=========================================================
+M-PESA B2C QUEUE TIMEOUT
+=========================================================
+
+POST
+
+/api/webhooks/mpesa/b2c/timeout
+
+The QueueTimeOutURL every seller payout is sent with.
+The payout is left held and flagged for review rather
+than failed, so a late result can't pay twice.
+=========================================================
+*/
+
+router.post(
+  "/mpesa/b2c/timeout",
+  mpesaB2CTimeout
 );
 
 

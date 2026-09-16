@@ -1,5 +1,6 @@
 const {
   db,
+  FieldValue,
 } = require("../config/firebase");
 
 const {
@@ -43,6 +44,71 @@ This service does NOT:
 
 =========================================================
 */
+
+
+/*
+=========================================================
+FIND THE WITHDRAWAL A CALLBACK BELONGS TO
+=========================================================
+
+Safaricom's B2C result carries no reference of ours —
+Occasion and Remarks are not echoed back in
+ResultParameters. What it does carry is the
+ConversationID / OriginatorConversationID from the
+response to our request, and markWithdrawalProcessing()
+stores both on the withdrawal. So that is what we match
+on (the same way financeWithdrawalCallbackService does),
+falling back to the copy kept under b2cRequest.
+=========================================================
+*/
+
+async function findWithdrawalIdByConversation({
+  conversationId,
+  originatorConversationId,
+}) {
+
+  const lookups = [
+    ["conversationId", conversationId],
+    ["originatorConversationId", originatorConversationId],
+    ["b2cRequest.conversationId", conversationId],
+    [
+      "b2cRequest.originatorConversationId",
+      originatorConversationId,
+    ],
+  ];
+
+
+  for (const [field, value] of lookups) {
+
+    if (!value) {
+
+      continue;
+
+    }
+
+
+    const snapshot =
+      await db
+        .collection(
+          COLLECTIONS.WITHDRAWALS
+        )
+        .where(field, "==", value)
+        .limit(1)
+        .get();
+
+
+    if (!snapshot.empty) {
+
+      return snapshot.docs[0].id;
+
+    }
+
+  }
+
+
+  return null;
+
+}
 
 
 /*
@@ -166,7 +232,11 @@ async function processMpesaB2CCallback(body) {
       "BillReferenceNumber",
       "Reference",
       "TransactionDesc",
-    ]);
+    ]) ||
+    await findWithdrawalIdByConversation({
+      conversationId,
+      originatorConversationId,
+    });
 
 
   /*
@@ -320,8 +390,132 @@ async function processMpesaB2CCallback(body) {
 }
 
 
+/*
+=========================================================
+B2C QUEUE TIMEOUT
+=========================================================
+
+Safaricom calls QueueTimeOutURL when a payout sat in
+their queue too long. The payout usually never happens —
+but "usually" is not good enough to hand the money back,
+because a late result callback could then pay the seller
+twice. So the withdrawal is left exactly as it is, held
+and PROCESSING, and flagged for a person to check against
+Safaricom's portal before releasing or failing it.
+=========================================================
+*/
+
+async function processMpesaB2CTimeout(body) {
+
+  const result =
+    body?.Result ||
+    body ||
+    {};
+
+
+  const conversationId =
+    result.ConversationID ||
+    null;
+
+
+  const originatorConversationId =
+    result.OriginatorConversationID ||
+    null;
+
+
+  const withdrawalId =
+    await findWithdrawalIdByConversation({
+      conversationId,
+      originatorConversationId,
+    });
+
+
+  if (!withdrawalId) {
+
+    console.error(
+      "❌ B2C timeout matched no withdrawal:",
+      JSON.stringify(
+        body,
+        null,
+        2
+      )
+    );
+
+
+    return {
+
+      handled: false,
+
+      requiresReview: true,
+
+      reason:
+        "WITHDRAWAL_NOT_FOUND",
+
+    };
+
+  }
+
+
+  console.error(
+    "⏱️ B2C payout timed out in Safaricom's queue. Left held for review:",
+    withdrawalId
+  );
+
+
+  await db
+    .collection(
+      COLLECTIONS.WITHDRAWALS
+    )
+    .doc(
+      withdrawalId
+    )
+    .update({
+
+      requiresReview: true,
+
+      reviewReason:
+        "B2C_QUEUE_TIMEOUT",
+
+      b2cTimeout: {
+
+        conversationId,
+
+        originatorConversationId,
+
+        providerResponse:
+          body,
+
+        receivedAt:
+          FieldValue.serverTimestamp(),
+
+      },
+
+      updatedAt:
+        FieldValue.serverTimestamp(),
+
+    });
+
+
+  return {
+
+    handled: true,
+
+    requiresReview: true,
+
+    withdrawalId,
+
+    reason:
+      "B2C_QUEUE_TIMEOUT",
+
+  };
+
+}
+
+
 module.exports = {
 
   processMpesaB2CCallback,
+
+  processMpesaB2CTimeout,
 
 };
