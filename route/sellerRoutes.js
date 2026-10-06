@@ -15,7 +15,32 @@ const {
 const router =
     express.Router();
 
+/*
+=========================================================
+ENSURE SELLER SHOP SLUG
+=========================================================
 
+POST /api/seller/ensure-shop-slug
+
+Creates a permanent public shop URL for the
+authenticated seller.
+
+Authentication:
+
+requireAuth
+    ↓
+sellerAuth
+    ↓
+sellerController.ensureShopSlug
+=========================================================
+*/
+
+router.post(
+    "/ensure-shop-slug",
+    requireAuth,
+    sellerAuth,
+    sellerController.ensureShopSlug
+);
 /*
 =========================================================
 BIASHNET SELLER ROUTES

@@ -1,10 +1,19 @@
 const sellerService =
     require("../service/sellerService");
 
+const {
+    getUidByShopSlug,
+} = require("../service/shopSlugService");
+
 
 /*
 =========================================================
 GET PUBLIC SELLER
+=========================================================
+
+GET:
+
+/api/public/sellers/:shopSlug
 =========================================================
 */
 
@@ -15,23 +24,59 @@ async function getPublicSeller(
 
     try {
 
-        const sellerId =
-            req.params.sellerId;
+        const shopSlug =
+            req.params.shopSlug;
 
 
-        if (!sellerId) {
+        if (!shopSlug) {
 
             return res.status(400).json({
 
                 success: false,
 
                 message:
-                    "Seller ID is required."
+                    "Shop slug is required."
 
             });
 
         }
 
+
+        /*
+        =====================================================
+        RESOLVE:
+
+        shopSlug
+             ↓
+        Firebase UID
+        =====================================================
+        */
+
+        const sellerId =
+            await getUidByShopSlug(
+                shopSlug
+            );
+
+
+        if (!sellerId) {
+
+            return res.status(404).json({
+
+                success: false,
+
+                message:
+                    "Shop not found."
+
+            });
+
+        }
+
+
+        /*
+        =====================================================
+        LOAD SELLER USING EXISTING SERVICE
+        =====================================================
+        */
 
         const seller =
             await sellerService.getPublicSeller(
@@ -43,7 +88,9 @@ async function getPublicSeller(
 
             success: true,
 
-            seller
+            seller,
+
+            shopSlug,
 
         });
 
@@ -79,12 +126,7 @@ GET PUBLIC SELLER PRODUCTS
 
 GET:
 
-/api/public/sellers/:sellerId/products?page=1&limit=20
-
-The frontend sends:
-
-page
-limit
+/api/public/sellers/:shopSlug/products?page=1&limit=20
 =========================================================
 */
 
@@ -95,18 +137,18 @@ async function getPublicSellerProducts(
 
     try {
 
-        const sellerId =
-            req.params.sellerId;
+        const shopSlug =
+            req.params.shopSlug;
 
 
-        if (!sellerId) {
+        if (!shopSlug) {
 
             return res.status(400).json({
 
                 success: false,
 
                 message:
-                    "Seller ID is required."
+                    "Shop slug is required."
 
             });
 
@@ -115,7 +157,37 @@ async function getPublicSellerProducts(
 
         /*
         =====================================================
-        PASS BOTH PAGE AND LIMIT TO SERVICE
+        RESOLVE:
+
+        shopSlug
+             ↓
+        Firebase UID
+        =====================================================
+        */
+
+        const sellerId =
+            await getUidByShopSlug(
+                shopSlug
+            );
+
+
+        if (!sellerId) {
+
+            return res.status(404).json({
+
+                success: false,
+
+                message:
+                    "Shop not found."
+
+            });
+
+        }
+
+
+        /*
+        =====================================================
+        LOAD PRODUCTS USING EXISTING SERVICE
         =====================================================
         */
 
@@ -137,6 +209,8 @@ async function getPublicSellerProducts(
         return res.json({
 
             success: true,
+
+            shopSlug,
 
             ...result,
 

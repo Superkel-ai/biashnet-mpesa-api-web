@@ -1,5 +1,12 @@
 const sellerService = require("../service/sellerService");
+const {
+    db,
+    FieldValue,
+} = require("../config/firebase");
 
+const {
+    createShopSlug,
+} = require("../service/shopSlugService");
 const {
     getSubOrdersForSeller,
 } = require("../service/logisticsService");
@@ -76,7 +83,323 @@ function getSellerId(req) {
 
 }
 
+/*
+=========================================================
+ENSURE SELLER SHOP SLUG
+=========================================================
 
+POST /api/seller/ensure-shop-slug
+
+PURPOSE:
+
+Creates or restores the permanent public shop slug
+for the authenticated seller.
+
+IMPORTANT:
+
+Seller UID ALWAYS comes from:
+
+    req.user.uid
+
+NEVER from:
+
+    req.body.uid
+    req.body.sellerId
+    req.query.uid
+    req.params.uid
+
+FLOW:
+
+1. Authenticate seller
+2. Read users/{uid}
+3. Check users/{uid}.shopSlug
+4. If missing, check shopSlugs collection
+5. If existing mapping is found, restore it
+6. Otherwise generate a new unique slug
+7. Save slug to users/{uid}
+8. Return slug
+=========================================================
+*/
+
+async function ensureShopSlug(
+    req,
+    res
+) {
+
+    try {
+
+        /*
+        =====================================================
+        GET AUTHENTICATED SELLER
+        =====================================================
+        */
+
+        const sellerId =
+            getSellerId(req);
+
+
+        /*
+        =====================================================
+        GET USER PROFILE
+        =====================================================
+        */
+
+        const userRef =
+            db
+                .collection("users")
+                .doc(sellerId);
+
+
+        const userSnap =
+            await userRef.get();
+
+
+        if (!userSnap.exists) {
+
+            const error =
+                new Error(
+                    "BIASHNET user profile not found."
+                );
+
+            error.statusCode = 404;
+
+            throw error;
+
+        }
+
+
+        const user =
+            userSnap.data();
+
+
+        /*
+        =====================================================
+        STEP 1 — USER DOCUMENT ALREADY HAS SHOP SLUG
+        =====================================================
+
+        This is the fastest path.
+
+        Example:
+
+            users/ABC123
+
+            shopSlug:
+                kevin-matush
+        =====================================================
+        */
+
+        if (user.shopSlug) {
+
+            return res.json({
+
+                success:
+                    true,
+
+                shopSlug:
+                    user.shopSlug,
+
+                existing:
+                    true,
+
+                restored:
+                    false,
+
+            });
+
+        }
+
+
+        /*
+        =====================================================
+        STEP 2 — CHECK MIGRATED SHOP SLUGS
+        =====================================================
+
+        Your migration created:
+
+            shopSlugs/{slug}
+
+        for existing sellers.
+
+        Some of those users may not yet have:
+
+            users/{uid}.shopSlug
+
+        Therefore we first look up the existing mapping.
+        =====================================================
+        */
+
+        const existingSlug =
+            await getShopSlugByUid(
+                sellerId
+            );
+
+
+        if (existingSlug) {
+
+            /*
+            * Restore the slug onto the user document.
+            */
+
+            await userRef.set(
+
+                {
+
+                    shopSlug:
+                        existingSlug,
+
+                    shopSlugVersion:
+                        1,
+
+                    shopSlugGeneratedAt:
+                        FieldValue.serverTimestamp(),
+
+                    updatedAt:
+                        FieldValue.serverTimestamp(),
+
+                },
+
+                {
+                    merge:
+                        true,
+                }
+
+            );
+
+
+            return res.json({
+
+                success:
+                    true,
+
+                shopSlug:
+                    existingSlug,
+
+                existing:
+                    true,
+
+                restored:
+                    true,
+
+            });
+
+        }
+
+
+        /*
+        =====================================================
+        STEP 3 — DETERMINE SHOP NAME
+        =====================================================
+
+        Priority:
+
+        1. shopName
+        2. businessName
+        3. name
+        =====================================================
+        */
+
+        const shopName =
+            user.shopName ||
+            user.businessName ||
+            user.name;
+
+
+        if (!shopName) {
+
+            const error =
+                new Error(
+                    "Seller name is required before creating a shop URL."
+                );
+
+            error.statusCode = 400;
+
+            throw error;
+
+        }
+
+
+        /*
+        =====================================================
+        STEP 4 — CREATE UNIQUE SHOP SLUG
+        =====================================================
+        */
+
+        const slugResult =
+            await createShopSlug(
+                shopName,
+                sellerId
+            );
+
+
+        const shopSlug =
+            slugResult.slug;
+
+
+        /*
+        =====================================================
+        STEP 5 — SAVE SHOP SLUG TO USER PROFILE
+        =====================================================
+        */
+
+        await userRef.set(
+
+            {
+
+                shopSlug,
+
+                shopSlugVersion:
+                    1,
+
+                shopSlugGeneratedAt:
+                    FieldValue.serverTimestamp(),
+
+                updatedAt:
+                    FieldValue.serverTimestamp(),
+
+            },
+
+            {
+                merge:
+                    true,
+            }
+
+        );
+
+
+        /*
+        =====================================================
+        SUCCESS
+        =====================================================
+        */
+
+        return res.status(201).json({
+
+            success:
+                true,
+
+            message:
+                "Seller shop URL created successfully.",
+
+            shopSlug,
+
+            existing:
+                false,
+
+            restored:
+                false,
+
+        });
+
+    } catch (error) {
+
+        return handleError(
+            res,
+            error
+        );
+
+    }
+
+}
 /*
 =========================================================
 ERROR HANDLER
@@ -1030,7 +1353,9 @@ EXPORTS
 
 module.exports = {
 
-    getShop,
+    getShop,  
+
+    ensureShopSlug,
 
     updateShop,
 

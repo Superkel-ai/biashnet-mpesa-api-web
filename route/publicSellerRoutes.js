@@ -23,11 +23,11 @@ BASE:
 /*
 GET PUBLIC SELLER
 
-/api/public/sellers/:sellerId
+/api/public/sellers/:shopSlug
 */
 
 router.get(
-    "/:sellerId",
+    "/:shopSlug",
     publicSellerController.getPublicSeller
 );
 
@@ -35,11 +35,11 @@ router.get(
 /*
 GET PUBLIC SELLER PRODUCTS
 
-/api/public/sellers/:sellerId/products
+/api/public/sellers/:shopSlug/products
 */
 
 router.get(
-    "/:sellerId/products",
+    "/:shopSlug/products",
     publicSellerController.getPublicSellerProducts
 );
 

@@ -7,42 +7,6 @@ const {
     COLLECTIONS,
 } = require("../config/collections");
 
-
-/*
-=========================================================
-BIASHNET SELLER SERVICE
-=========================================================
-
-ONE SERVICE FOR ALL SELLER OPERATIONS
-
-RESPONSIBILITIES
-
-1. Seller profile / shop
-2. Seller dashboard
-3. Seller products
-4. Seller product status
-5. Seller orders
-6. Seller order details
-7. Seller earnings
-8. Seller statistics
-
-IMPORTANT SECURITY RULE
-
-sellerId MUST ALWAYS come from Firebase Authentication.
-
-NEVER trust:
-
-req.body.sellerId
-req.query.sellerId
-req.params.sellerId
-
-The controller should pass:
-
-sellerId = authenticated Firebase user UID
-=========================================================
-*/
-
-
 /*
 =========================================================
 HELPERS
@@ -65,7 +29,6 @@ function money(value) {
     );
 
 }
-
 
 function cleanString(value) {
 
