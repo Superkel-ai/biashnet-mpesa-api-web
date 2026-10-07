@@ -721,6 +721,43 @@ async function getPublicSellerProducts(
                 data.description ||
                 "",
 
+
+            
+    /*
+    =================================================
+    PUBLIC SHOP
+    =================================================
+    */
+
+    shopSlug:
+        seller.shopSlug ||
+        shopSlug,
+
+ /*
+    =================================================
+    SELLER
+    =================================================
+    */
+
+    sellerId:
+        sellerId,
+
+    sellerName:
+        seller.name ||
+        "",
+
+    sellerPhoto:
+        seller.photoURL ||
+        "",
+
+    sellerVerified:
+        seller.sellerVerified === true,
+
+    sellerBadge:
+        seller.sellerBadge ||
+        null,
+
+        
             category:
                 data.category ||
                 "",
