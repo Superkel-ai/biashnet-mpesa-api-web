@@ -7,6 +7,11 @@ const {
     COLLECTIONS,
 } = require("../config/collections");
 
+const {
+    getUidByShopSlug,
+    getShopSlugByUid,
+} = require("./shopSlugService");
+
 /*
 =========================================================
 HELPERS
@@ -242,37 +247,73 @@ async function getShop(sellerId) {
 GET PUBLIC SELLER
 =========================================================
 
-Used when a customer visits a seller storefront.
+Public storefront identity is the shop slug.
 
 Example:
 
-GET /api/public/sellers/:sellerId
+GET /api/public/sellers/john-electronics
 
-IMPORTANT:
+Flow:
 
-- sellerId identifies the seller being viewed
-- This is NOT the authenticated user's ID
-- Never expose private user/account fields
+shopSlug
+   ↓
+shopSlugs/{shopSlug}
+   ↓
+seller UID
+   ↓
+users/{sellerUID}
+
+The Firebase UID is returned internally as sellerId
+so the frontend can use it for authenticated actions
+such as follow/unfollow.
 =========================================================
 */
 
-async function getPublicSeller(
-    sellerId
-) {
+async function getPublicSeller(shopSlug) {
 
-    if (!sellerId) {
+    if (!shopSlug) {
 
         const error =
             new Error(
-                "Seller ID is required."
+                "Shop slug is required."
             );
 
         error.statusCode = 400;
 
         throw error;
-
     }
 
+
+    /*
+    =====================================================
+    RESOLVE SHOP SLUG → SELLER UID
+    =====================================================
+    */
+
+    const sellerId =
+        await getUidByShopSlug(
+            shopSlug
+        );
+
+
+    if (!sellerId) {
+
+        const error =
+            new Error(
+                "Seller not found."
+            );
+
+        error.statusCode = 404;
+
+        throw error;
+    }
+
+
+    /*
+    =====================================================
+    LOAD SELLER
+    =====================================================
+    */
 
     const sellerRef =
         db
@@ -298,7 +339,6 @@ async function getPublicSeller(
         error.statusCode = 404;
 
         throw error;
-
     }
 
 
@@ -324,7 +364,6 @@ async function getPublicSeller(
         error.statusCode = 404;
 
         throw error;
-
     }
 
 
@@ -347,7 +386,6 @@ async function getPublicSeller(
         error.statusCode = 404;
 
         throw error;
-
     }
 
 
@@ -369,7 +407,6 @@ async function getPublicSeller(
         error.statusCode = 404;
 
         throw error;
-
     }
 
 
@@ -377,76 +414,97 @@ async function getPublicSeller(
     =====================================================
     PUBLIC SELLER PROFILE
     =====================================================
-
-    NEVER return:
-
-    - email
-    - phone
-    - roles
-    - wallet
-    - earnings
-    - subscription internals
-    - authentication information
-    - private account information
-    =====================================================
     */
 
     return {
 
+        /*
+         * Firebase UID.
+         *
+         * Used internally by the frontend for
+         * follow/unfollow requests.
+         */
+
         id:
-            snapshot.id,
+            sellerId,
 
         sellerId:
-            snapshot.id,
+            sellerId,
+
+
+        /*
+         * Public shop identity.
+         */
+
+        shopSlug:
+            shopSlug,
+
 
         name:
             seller.name ||
             seller.fullName ||
             "",
 
+
         photoURL:
             seller.photoURL ||
             seller.photo ||
             "",
 
+
         bio:
             seller.bio ||
             "",
+
 
         location:
             seller.location ||
             "",
 
-             /* =====================================================
-       PUBLIC CONTACT
-       ===================================================== */
 
-    whatsappEnabled:
-        seller.whatsappEnabled !== false,
+        /*
+        =================================================
+        PUBLIC CONTACT
+        =================================================
+        */
 
-    whatsappNumber:
-        seller.whatsappEnabled === false
-            ? null
-            : (
-                seller.sellerWhatsapp ||
-                seller.phone ||
-                null
-            ),
+        whatsappEnabled:
+            seller.whatsappEnabled === true,
+
+
+        whatsappNumber:
+            seller.whatsappEnabled === true
+                ? (
+                    seller.sellerWhatsapp ||
+                    null
+                )
+                : null,
+
+
+        /*
+        =================================================
+        PUBLIC TRUST INFORMATION
+        =================================================
+        */
 
         verified:
             seller.verified === true,
 
+
         sellerVerified:
             seller.roles?.sellerVerified === true,
+
 
         badgeLevel:
             seller.badgeLevel ||
             seller.roles?.sellerBadge ||
             null,
 
+
         sellerBadge:
             seller.roles?.sellerBadge ||
             null,
+
 
         sellerRating:
             Number(
@@ -455,11 +513,13 @@ async function getPublicSeller(
                 0
             ),
 
+
         totalRatings:
             Number(
                 seller.totalRatings ||
                 0
             ),
+
 
         listingsCount:
             Number(
@@ -468,37 +528,14 @@ async function getPublicSeller(
                 0
             ),
 
+
         followersCount:
             Number(
                 seller.followersCount ||
                 0
             ),
 
-        ordersCount:
-            Number(
-                seller.ordersCount ||
-                0
-            ),
-
-        completedOrders:
-            Number(
-                seller.completedOrders ||
-                0
-            ),
-
-        subscriptionActive:
-            seller.subscriptionActive === true,
-
-        subscriptionPlan:
-            seller.subscriptionPlan ||
-            null,
-
-        subscriptionExpiresAt:
-            seller.subscriptionExpiresAt ||
-            null,
-
     };
-
 }
 
 /*
@@ -529,36 +566,44 @@ products.userId
 */
 
 async function getPublicSellerProducts(
-    sellerId,
+    shopSlug,
     options = {}
 ) {
 
-    if (!sellerId) {
+     if (!shopSlug) {
 
         const error =
             new Error(
-                "Seller ID is required."
+                "Shop slug is required."
             );
 
         error.statusCode = 400;
 
         throw error;
-
-    }
-
+    }  
 
     /*
     =====================================================
-    VERIFY PUBLIC SELLER
+    RESOLVE SHOP SLUG → SELLER UID
     =====================================================
     */
 
     const seller =
         await getPublicSeller(
-            sellerId
+            shopSlug
         );
 
 
+    /*
+    =====================================================
+    ACTUAL FIREBASE SELLER UID
+    =====================================================
+    */
+
+    const sellerId =
+        seller.sellerId;
+
+    
     /*
     =====================================================
     PAGINATION
