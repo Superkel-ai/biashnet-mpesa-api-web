@@ -14,6 +14,20 @@ GET PUBLIC SELLER
 GET:
 
 /api/public/sellers/:shopSlug
+
+Example:
+
+/api/public/sellers/biashnet-official
+
+FLOW:
+
+shopSlug
+   ↓
+shopSlugs/{shopSlug}
+   ↓
+Firebase UID
+   ↓
+sellerService.getPublicSeller(uid)
 =========================================================
 */
 
@@ -44,11 +58,7 @@ async function getPublicSeller(
 
         /*
         =====================================================
-        RESOLVE:
-
-        shopSlug
-             ↓
-        Firebase UID
+        FIND SELLER UID FROM SHOP SLUG
         =====================================================
         */
 
@@ -74,7 +84,7 @@ async function getPublicSeller(
 
         /*
         =====================================================
-        LOAD SELLER USING EXISTING SERVICE
+        NOW USE EXISTING SELLER SERVICE
         =====================================================
         */
 
@@ -127,6 +137,16 @@ GET PUBLIC SELLER PRODUCTS
 GET:
 
 /api/public/sellers/:shopSlug/products?page=1&limit=20
+
+FLOW:
+
+shopSlug
+   ↓
+shopSlugs/{shopSlug}
+   ↓
+Firebase UID
+   ↓
+sellerService.getPublicSellerProducts(uid)
 =========================================================
 */
 
@@ -157,11 +177,7 @@ async function getPublicSellerProducts(
 
         /*
         =====================================================
-        RESOLVE:
-
-        shopSlug
-             ↓
-        Firebase UID
+        FIND SELLER UID FROM SHOP SLUG
         =====================================================
         */
 
@@ -187,7 +203,7 @@ async function getPublicSellerProducts(
 
         /*
         =====================================================
-        LOAD PRODUCTS USING EXISTING SERVICE
+        GET SELLER PRODUCTS
         =====================================================
         */
 

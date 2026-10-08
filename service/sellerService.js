@@ -247,25 +247,6 @@ async function getShop(sellerId) {
 GET PUBLIC SELLER
 =========================================================
 
-Public storefront identity is the shop slug.
-
-Example:
-
-GET /api/public/sellers/john-electronics
-
-Flow:
-
-shopSlug
-   ↓
-shopSlugs/{shopSlug}
-   ↓
-seller UID
-   ↓
-users/{sellerUID}
-
-The Firebase UID is returned internally as sellerId
-so the frontend can use it for authenticated actions
-such as follow/unfollow.
 =========================================================
 */
 
