@@ -183,29 +183,74 @@ const createShopSlug = async (shopName, uid) => {
 };
 
 /* =========================================================
-   GET SELLER UID FROM SLUG
+GET SELLER UID FROM SLUG — WITH DIAGNOSTICS
 ========================================================= */
 
-const getUidByShopSlug = async (
-  shopSlug
-) => {
-  if (!shopSlug) {
-    return null;
-  }
+const getUidByShopSlug = async (shopSlug) => {
+console.log("[SHOP_SLUG_LOOKUP]", {
+requestedShopSlug: shopSlug || null,
+});
 
-  const ref = db
-    .collection(SHOP_SLUGS_COLLECTION)
-    .doc(shopSlug);
+if (!shopSlug) {
+console.error("[SHOP_SLUG_LOOKUP]", {
+reason: "Shop slug is missing or empty.",
+});
 
-  const snap = await ref.get();
+return null;
 
-  if (!snap.exists) {
-    return null;
-  }
+}
 
-  const data = snap.data();
+try {
+const ref = db
+.collection(SHOP_SLUGS_COLLECTION)
+.doc(shopSlug);
 
-  return data.uid || null;
+const snap = await ref.get();
+
+if (!snap.exists) {
+  console.error("[SHOP_SLUG_LOOKUP:DOCUMENT_MISSING]", {
+    collection: SHOP_SLUGS_COLLECTION,
+    documentId: shopSlug,
+    reason: "The shop slug document does not exist.",
+  });
+
+  return null;
+}
+
+const data = snap.data();
+const uid = data?.uid || null;
+
+if (!uid) {
+  console.error("[SHOP_SLUG_LOOKUP:UID_MISSING]", {
+    collection: SHOP_SLUGS_COLLECTION,
+    documentId: shopSlug,
+    documentExists: true,
+    availableFieldNames: Object.keys(data || {}),
+    reason: "The document exists but its uid field is missing or empty.",
+  });
+
+  return null;
+}
+
+console.log("[SHOP_SLUG_LOOKUP:SUCCESS]", {
+  requestedShopSlug: shopSlug,
+  resolvedSellerId: uid,
+});
+
+return uid;
+
+} catch (error) {
+console.error("[SHOP_SLUG_LOOKUP]", {
+requestedShopSlug: shopSlug,
+collection: SHOP_SLUGS_COLLECTION,
+errorName: error.name || null,
+errorMessage: error.message || String(error),
+errorCode: error.code || null,
+});
+
+throw error;
+
+}
 };
 
 /* =========================================================

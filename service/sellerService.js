@@ -250,275 +250,241 @@ GET PUBLIC SELLER
 =========================================================
 */
 
+
 async function getPublicSeller(shopSlug) {
+    console.log("[PUBLIC_SELLER:START]", {
+        requestedShopSlug: shopSlug || null,
+    });
 
     if (!shopSlug) {
+        console.error("[PUBLIC_SELLER:INVALID_INPUT]", {
+            reason: "Shop slug is missing or empty.",
+        });
 
-        const error =
-            new Error(
-                "Shop slug is required."
-            );
-
+        const error = new Error("Shop slug is required.");
         error.statusCode = 400;
-
         throw error;
     }
 
-
     /*
     =====================================================
-    RESOLVE SHOP SLUG → SELLER UID
+    STEP 1: RESOLVE SHOP SLUG → SELLER UID
     =====================================================
     */
+    let sellerId;
 
-    const sellerId =
-        await getUidByShopSlug(
-            shopSlug
-        );
+    try {
+        sellerId = await getUidByShopSlug(shopSlug);
 
+        console.log("[PUBLIC_SELLER:SLUG_RESOLUTION]", {
+            requestedShopSlug: shopSlug,
+            mappingResolved: Boolean(sellerId),
+            resolvedSellerId: sellerId || null,
+        });
+    } catch (lookupError) {
+        console.error("[PUBLIC_SELLER:SLUG_RESOLUTION_ERROR]", {
+            requestedShopSlug: shopSlug,
+            errorName: lookupError.name || null,
+            errorMessage: lookupError.message || String(lookupError),
+            errorCode: lookupError.code || null,
+        });
+
+        throw lookupError;
+    }
 
     if (!sellerId) {
+        console.error("[PUBLIC_SELLER:NOT_FOUND]", {
+            failedAt: "SLUG_RESOLUTION",
+            requestedShopSlug: shopSlug,
+            reason: "No seller UID was returned by getUidByShopSlug().",
+        });
 
-        const error =
-            new Error(
-                "Seller not found."
-            );
-
+        const error = new Error("Seller not found.");
         error.statusCode = 404;
-
         throw error;
     }
 
-
     /*
     =====================================================
-    LOAD SELLER
+    STEP 2: LOAD users/{sellerId}
     =====================================================
     */
+    let snapshot;
 
-    const sellerRef =
-        db
-            .collection(
-                COLLECTIONS.USERS
-            )
-            .doc(
-                sellerId
-            );
+    try {
+        snapshot = await db
+            .collection(COLLECTIONS.USERS)
+            .doc(sellerId)
+            .get();
 
+        console.log("[PUBLIC_SELLER:USER_DOCUMENT_LOOKUP]", {
+            requestedShopSlug: shopSlug,
+            usersCollection: COLLECTIONS.USERS,
+            resolvedSellerId: sellerId,
+            documentExists: snapshot.exists,
+        });
+    } catch (lookupError) {
+        console.error("[PUBLIC_SELLER:USER_DOCUMENT_ERROR]", {
+            requestedShopSlug: shopSlug,
+            usersCollection: COLLECTIONS.USERS,
+            resolvedSellerId: sellerId,
+            errorName: lookupError.name || null,
+            errorMessage: lookupError.message || String(lookupError),
+            errorCode: lookupError.code || null,
+        });
 
-    const snapshot =
-        await sellerRef.get();
-
+        throw lookupError;
+    }
 
     if (!snapshot.exists) {
+        console.error("[PUBLIC_SELLER:NOT_FOUND]", {
+            failedAt: "USER_DOCUMENT_LOOKUP",
+            requestedShopSlug: shopSlug,
+            resolvedSellerId: sellerId,
+            usersCollection: COLLECTIONS.USERS,
+            reason: "The slug resolved to a UID, but users/{sellerId} does not exist.",
+        });
 
-        const error =
-            new Error(
-                "Seller not found."
-            );
-
+        const error = new Error("Seller not found.");
         error.statusCode = 404;
-
         throw error;
     }
 
-
-    const seller =
-        snapshot.data();
-
+    const seller = snapshot.data();
 
     /*
     =====================================================
-    VERIFY SELLER
+    STEP 3: VERIFY SELLER ROLE
     =====================================================
     */
+    const hasSellerRole = seller.roles?.seller === true;
 
-    if (
-        seller.roles?.seller !== true
-    ) {
+    console.log("[PUBLIC_SELLER:ROLE_CHECK]", {
+        requestedShopSlug: shopSlug,
+        resolvedSellerId: sellerId,
+        sellerRoleIsTrue: hasSellerRole,
+    });
 
-        const error =
-            new Error(
-                "This account is not a seller."
-            );
+    if (!hasSellerRole) {
+        console.error("[PUBLIC_SELLER:NOT_FOUND]", {
+            failedAt: "SELLER_ROLE_CHECK",
+            requestedShopSlug: shopSlug,
+            resolvedSellerId: sellerId,
+            reason: "seller.roles.seller is not true.",
+        });
 
+        const error = new Error("This account is not a seller.");
         error.statusCode = 404;
-
         throw error;
     }
 
-
     /*
     =====================================================
-    ONLY ACTIVE SELLERS ARE PUBLIC
+    STEP 4: VERIFY ACCOUNT STATUS
     =====================================================
     */
+    const accountStatus = seller.accountStatus ?? null;
+
+    console.log("[PUBLIC_SELLER:ACCOUNT_STATUS_CHECK]", {
+        requestedShopSlug: shopSlug,
+        resolvedSellerId: sellerId,
+        accountStatus,
+        passesCheck: !accountStatus || accountStatus === "active",
+    });
 
     if (
         seller.accountStatus &&
         seller.accountStatus !== "active"
     ) {
+        console.error("[PUBLIC_SELLER:NOT_FOUND]", {
+            failedAt: "ACCOUNT_STATUS_CHECK",
+            requestedShopSlug: shopSlug,
+            resolvedSellerId: sellerId,
+            accountStatus,
+            reason: "Seller account status is not active.",
+        });
 
-        const error =
-            new Error(
-                "This seller is currently unavailable."
-            );
-
+        const error = new Error(
+            "This seller is currently unavailable."
+        );
         error.statusCode = 404;
-
         throw error;
     }
 
-
     /*
     =====================================================
-    SHOP VISIBILITY
+    STEP 5: VERIFY SHOP VISIBILITY
     =====================================================
     */
+    console.log("[PUBLIC_SELLER:VISIBILITY_CHECK]", {
+        requestedShopSlug: shopSlug,
+        resolvedSellerId: sellerId,
+        shopVisible: seller.shopVisible ?? null,
+        passesCheck: seller.shopVisible !== false,
+    });
 
-    if (
-        seller.shopVisible === false
-    ) {
+    if (seller.shopVisible === false) {
+        console.error("[PUBLIC_SELLER:NOT_FOUND]", {
+            failedAt: "SHOP_VISIBILITY_CHECK",
+            requestedShopSlug: shopSlug,
+            resolvedSellerId: sellerId,
+            reason: "shopVisible is explicitly false.",
+        });
 
-        const error =
-            new Error(
-                "This seller shop is currently hidden."
-            );
-
+        const error = new Error(
+            "This seller shop is currently hidden."
+        );
         error.statusCode = 404;
-
         throw error;
     }
 
-
     /*
     =====================================================
-    PUBLIC SELLER PROFILE
+    STEP 6: RETURN PUBLIC SELLER PROFILE
     =====================================================
     */
+    const publicSeller = {
+        id: sellerId,
+        sellerId,
+        shopSlug,
 
-    return {
+        name: seller.name || seller.fullName || "",
+        photoURL: seller.photoURL || seller.photo || "",
+        bio: seller.bio || "",
+        location: seller.location || "",
 
-        /*
-         * Firebase UID.
-         *
-         * Used internally by the frontend for
-         * follow/unfollow requests.
-         */
-
-        id:
-            sellerId,
-
-        sellerId:
-            sellerId,
-
-
-        /*
-         * Public shop identity.
-         */
-
-        shopSlug:
-            shopSlug,
-
-
-        name:
-            seller.name ||
-            seller.fullName ||
-            "",
-
-
-        photoURL:
-            seller.photoURL ||
-            seller.photo ||
-            "",
-
-
-        bio:
-            seller.bio ||
-            "",
-
-
-        location:
-            seller.location ||
-            "",
-
-
-        /*
-        =================================================
-        PUBLIC CONTACT
-        =================================================
-        */
-
-        whatsappEnabled:
-            seller.whatsappEnabled === true,
-
-
+        whatsappEnabled: seller.whatsappEnabled === true,
         whatsappNumber:
             seller.whatsappEnabled === true
-                ? (
-                    seller.sellerWhatsapp ||
-                    null
-                )
+                ? seller.sellerWhatsapp || null
                 : null,
 
-
-        /*
-        =================================================
-        PUBLIC TRUST INFORMATION
-        =================================================
-        */
-
-        verified:
-            seller.verified === true,
-
-
-        sellerVerified:
-            seller.roles?.sellerVerified === true,
-
-
+        verified: seller.verified === true,
+        sellerVerified: seller.roles?.sellerVerified === true,
         badgeLevel:
             seller.badgeLevel ||
             seller.roles?.sellerBadge ||
             null,
+        sellerBadge: seller.roles?.sellerBadge || null,
 
-
-        sellerBadge:
-            seller.roles?.sellerBadge ||
-            null,
-
-
-        sellerRating:
-            Number(
-                seller.sellerRating ||
-                seller.averageRating ||
-                0
-            ),
-
-
-        totalRatings:
-            Number(
-                seller.totalRatings ||
-                0
-            ),
-
-
-        listingsCount:
-            Number(
-                seller.listingsCount ||
-                seller.totalListings ||
-                0
-            ),
-
-
-        followersCount:
-            Number(
-                seller.followersCount ||
-                0
-            ),
-
+        sellerRating: Number(
+            seller.sellerRating || seller.averageRating || 0
+        ),
+        totalRatings: Number(seller.totalRatings || 0),
+        listingsCount: Number(
+            seller.listingsCount || seller.totalListings || 0
+        ),
+        followersCount: Number(seller.followersCount || 0),
     };
-}
 
+    console.log("[PUBLIC_SELLER:SUCCESS]", {
+        requestedShopSlug: shopSlug,
+        resolvedSellerId: sellerId,
+        returned: true,
+    });
+
+    return publicSeller;
+}
 /*
 =========================================================
 GET PUBLIC SELLER PRODUCTS
@@ -569,22 +535,33 @@ async function getPublicSellerProducts(
     =====================================================
     */
 
-    const seller =
-        await getPublicSeller(
-            shopSlug
-        );
+    console.log("[PUBLIC_SELLER_PRODUCTS:START]", {
+    requestedShopSlug: shopSlug,
+    page: options.page || 1,
+    limit: options.limit || 20,
+});
 
+let seller;
 
-    /*
-    =====================================================
-    ACTUAL FIREBASE SELLER UID
-    =====================================================
-    */
+try {
+    seller = await getPublicSeller(shopSlug);
 
-    const sellerId =
-        seller.sellerId;
+    console.log("[PUBLIC_SELLER_PRODUCTS:SELLER_RESOLVED]", {
+        requestedShopSlug: shopSlug,
+        resolvedSellerId: seller.sellerId,
+        sellerResolved: true,
+    });
+} catch (error) {
+    console.error("[PUBLIC_SELLER_PRODUCTS:SELLER_RESOLUTION_FAILED]", {
+        requestedShopSlug: shopSlug,
+        errorMessage: error.message || String(error),
+        errorStatusCode: error.statusCode || null,
+    });
 
-    
+    throw error;
+}
+
+const sellerId = seller.sellerId;
     /*
     =====================================================
     PAGINATION
