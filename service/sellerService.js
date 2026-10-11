@@ -42,7 +42,33 @@ function cleanString(value) {
     ).trim();
 
 }
+ 
 
+/**
+ * Normalize Kenyan phone numbers for WhatsApp links.
+ *
+ * 0758922614   -> 254758922614
+ * 0112345678   -> 254112345678
+ * +254758922614 -> 254758922614
+ */
+function normalizeKenyanPhone(value) {
+    let phone = String(value || "").replace(/\D/g, "");
+
+    if (phone.startsWith("0") && phone.length === 10) {
+        phone = "254" + phone.slice(1);
+    } else if (phone.startsWith("254") && phone.length === 12) {
+        // Already in international format.
+    } else {
+        return null;
+    }
+
+    // Accept Kenyan mobile numbers beginning 2547 or 2541.
+    if (/^254[17]\d{8}$/.test(phone)) {
+        return phone;
+    }
+
+    return null;
+}
 
 /*
 =========================================================
