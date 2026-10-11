@@ -453,11 +453,19 @@ async function getPublicSeller(shopSlug) {
         bio: seller.bio || "",
         location: seller.location || "",
 
-        whatsappEnabled: seller.whatsappEnabled === true,
-        whatsappNumber:
-            seller.whatsappEnabled === true
-                ? seller.sellerWhatsapp || null
-                : null,
+       // WhatsApp contact defaults to the seller's registered phone.
+whatsappEnabled: Boolean(
+    seller.sellerWhatsapp ||
+    seller.whatsappNumber ||
+    seller.phone
+),
+
+whatsappNumber: normalizeKenyanPhone(
+    seller.sellerWhatsapp ||
+    seller.whatsappNumber ||
+    seller.phone ||
+    ""
+),
 
         verified: seller.verified === true,
         sellerVerified: seller.roles?.sellerVerified === true,
